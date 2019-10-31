@@ -1,0 +1,35 @@
+{
+  "name": "@fort-capital/etl-transformer-core",
+  "version": "1.0.0",
+  "description": "Transform data from pubsub and save to warehouse",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "dependencies": {
+    "crypto-random-string": "^3.0.1",
+    "stream": "^0.0.2"
+  },
+  "devDependencies": {
+    "@google-cloud/pubsub": "^1.1.5",
+    "@google-cloud/storage": "^4.0.0",
+    "@types/eslint": "^6.1.3",
+    "@types/jest": "^24.0.21",
+    "@types/node": "^12.7.5",
+    "@typescript-eslint/eslint-plugin": "^2.6.0",
+    "@typescript-eslint/parser": "^2.6.0",
+    "eslint": "^6.6.0",
+    "jest": "^24.9.0",
+    "jest-date-mock": "^1.0.7",
+    "ts-jest": "^24.1.0",
+    "ts-node": "^8.4.1",
+    "typescript": "^3.6.4"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "tsc --noEmit && eslint \"**/*.{js,ts}\" --quiet --fix",
+    "test": "jest --forceExit --coverage --verbose",
+    "unittest": "jest",
+    "unittest:debug": "node --inspect-brk node_modules/.bin/jest --runInBand"
+  },
+  "author": "",
+  "license": "ISC"
+}
