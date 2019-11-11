@@ -1,3 +1,6 @@
+const {Storage} = require("@google-cloud/storage");
+const {PubSub} = require("@google-cloud/pubsub");
+
 import {Downloader, GCloudDownloader} from "@adapters/downloader";
 import {Extractor, ExtractFunc} from "@adapters/extractor";
 import {generateRequestIdentifier, cleanMessage} from "@/utils";
@@ -6,25 +9,35 @@ import {Uploader, GCloudUploader} from "@adapters/uploader";
 import {Table, Bucket, Topic} from "@adapters/model";
 
 export interface GCloudConfig {
-  extractBucket: Bucket;
-  stagingBucket: Bucket;
-  topic: Topic;
+  datalake: string;
+  staging: string;
+  topic: string;
   service: string;
   method: string;
-  extractRecords: ExtractFunc;
+  table: string;
 }
 
 export abstract class BaseTransformer {
   abstract downloader: Downloader;
   abstract uploader: Uploader;
+  abstract extractFunc: ExtractFunc;
   abstract getExtractor(filePath: string): Extractor;
   abstract getLogger(filePath: string): Logger;
 
-  async transform(pubSubEvent: any, context?: any) {
+  extractRecords(extractFunc: ExtractFunc) {
+    this.extractFunc = extractFunc
+  }
+
+  async handler(pubSubEvent: any, context?: any) {
+    if (!this.extractFunc) throw "Please set extractRecords";
+
     const msg = cleanMessage(pubSubEvent.data);
     if (!msg) return 1;
 
-    const sourceFile = msg.source;
+    return this.transform(msg.source);
+  }
+
+  async transform(sourceFile: string) {
     const logger = this.getLogger(sourceFile);
     const extractor = this.getExtractor(sourceFile);
     await logger.log({event: "start"});
@@ -57,18 +70,34 @@ export class GCloudPubSubTransformer extends BaseTransformer {
   config: GCloudConfig;
   downloader: Downloader;
   uploader: Uploader;
+  extractFunc: ExtractFunc;
+  topic: Topic;
 
   constructor(config: GCloudConfig) {
     super();
+
+    const pubsub = new PubSub();
+    const storage = new Storage();
+    const datalakeBucket = storage.bucket(config.datalake);
+    const stagingBucket = storage.bucket(config.staging);
+    const topic = pubsub.topic(config.topic);
+
     this.config = config;
-    this.downloader = new GCloudDownloader(this.config.extractBucket);
-    this.uploader = new GCloudUploader(this.config.stagingBucket);
+    this.downloader = new GCloudDownloader(datalakeBucket);
+    this.uploader = new GCloudUploader(stagingBucket);
+    this.topic = topic;
     this.transform = this.transform.bind(this);
+    this.handler = this.handler.bind(this);
+  }
+
+  get name(): string {
+    const { service, method } = this.config;
+    return `etl-transformer-${service}-${method}`;
   }
 
   getExtractor(filePath: string): Extractor {
-    const {service, method} = this.config;
-    return new Extractor(`${service}_${method}`, filePath, this.config.extractRecords);
+    const {table} = this.config;
+    return new Extractor(table, filePath, this.extractFunc);
   }
 
   getLogger(filePath: string): Logger {
@@ -81,6 +110,6 @@ export class GCloudPubSubTransformer extends BaseTransformer {
       sourceFile: filePath,
       identifier,
       source,
-    }, this.config.topic);
+    }, this.topic);
   }
 }
